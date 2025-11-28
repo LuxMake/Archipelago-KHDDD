@@ -273,7 +273,7 @@ def set_rules(khdddworld):
         add_rule(khdddworld.get_location("Traverse Town Fountain Plaza Ice Dream Cone [Sora]"),
                  lambda state: state.has_any({"Glide", "Rail Slide", "Superglide", "Flowmotion"}, player) or (can_infinite_jump(state, player)))
         add_rule(khdddworld.get_location("Traverse Town Fountain Plaza Rampant Fantasy [Sora]"),
-                 lambda state: state.has_any({"Glide", "Rail Slide", "Superglide", "Flowmotion"}, player) or (can_infinite_jump(state, player)))
+                 lambda state: state.has_any({"Glide", "Rail Slide", "Superglide", "Flowmotion"}, player) and (can_infinite_jump(state, player)))
         add_rule(khdddworld.get_location("Traverse Town Fountain Plaza Strike Raid [Sora]"),
                  lambda state: state.has_any({"Glide", "Superglide", "Flowmotion"}, player) or (can_infinite_jump(state, player)))
 
@@ -455,6 +455,14 @@ def set_rules(khdddworld):
         add_rule(khdddworld.get_location("La Cite des Cloches Bell Tower Dulcet Figment [Riku]"),
                  lambda state: state.has_any({"Flowmotion", "High Jump", "Double Flight"}, player) or (
                      can_pole_jump(state, player)) or (can_infinite_jump(state, player)))
+        add_rule(khdddworld.get_location("La Cite des Cloches Wargoyle Bonus Slot 1 [Riku]"), #Require Air Slide for these checks for convenience
+                 lambda state: state.has("Air Slide", player))
+        add_rule(khdddworld.get_location("La Cite des Cloches Wargoyle Bonus Slot 2 [Riku]"),
+                 lambda state: state.has("Air Slide", player))
+        add_rule(khdddworld.get_location("La Cite des Cloches Chronicle: Kingdom Hearts Reward [Riku]"),
+                 lambda state: state.has("Air Slide", player))
+        add_rule(khdddworld.get_location("La Cite des Cloches Guardian Bell Reward [Riku]"),
+                 lambda state: state.has("Air Slide", player))
 
         ###################################
         ##############The Grid#############
@@ -636,7 +644,7 @@ def set_rules(khdddworld):
         #####The World That Never Was######
         ###################################
         add_rule(khdddworld.get_location("The World That Never Was Ansem II Bonus Slot 1 [Riku]"),
-                 lambda state: state.has_any({"Flowmotion", "Rail Slide"}, player))
+                 lambda state: state.has_any({"Flowmotion", "Rail Slide"}, player) and state.has("Air Slide", player))
 
         if options.goal == 0: #YX/AVN can only be played with Final Boss goal
             if options.character == 0:
