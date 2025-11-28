@@ -41,7 +41,7 @@ def create_regions(multiworld: MultiWorld, player: int, options):
     for name, data in location_data_table.items():
 
         # Skip DI locations
-        if data.region == "Destiny Islands" and not options.play_destiny_islands or options.character > 1:
+        if data.region == "Destiny Islands" and not options.play_destiny_islands or options.character > 1 and data.region == "Destiny Islands":
             continue
 
         # Skip character-specific locations
