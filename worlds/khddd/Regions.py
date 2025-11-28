@@ -39,17 +39,18 @@ def create_regions(multiworld: MultiWorld, player: int, options):
     #Attach locations to regions
 
     for name, data in location_data_table.items():
-
+        
         # Skip DI locations
         if data.region == "Destiny Islands" and not options.play_destiny_islands or options.character > 1 and data.region == "Destiny Islands":
             continue
 
         # Skip character-specific locations
-        if options.character == 1 and name.find("Riku") > -1 or options.character == 2 and name.find("Sora") > -1:
-            continue
+        if name.find("Superbosses") == -1:
+            if options.character == 1 and name.find("Riku") > -1 or options.character == 2 and name.find("Sora") > -1:
+                continue
 
         # Skip AVN is not needed
-        if name.find("Ventus") > -1 and not options.armored_ventus_nightmare or options.goal == 1:
+        if name.find("Ventus") > -1 and not options.armored_ventus_nightmare or options.goal == 1 and name.find("Ventus") > -1:
             continue
 
         # Skip Superbosses if not enabled
