@@ -74,6 +74,8 @@ def has_required_recipes(state:CollectionState, player:int, num_of_recipes: int)
             recipes_acquired += 1.0
     return recipes_acquired >= num_of_recipes
 
+def has_macguffins(state:CollectionState, player:int, num_of_recipes) -> bool:
+    state.has_all({"Meow Wow Recipe", "Komory Bat Recipe", "Recusant Sigil"}, player) and has_required_recipes(state, player, num_of_recipes)
 
 def can_infinite_jump(state: CollectionState, player: int) -> bool:
     return state.has_all({"Wall Kick", "Super Jump"}, player)
@@ -384,31 +386,27 @@ def set_rules(khdddworld):
         ###################################
         add_rule(khdddworld.get_location("The World That Never Was Xemnas Bonus Slot 1 [Sora]"),
                  lambda state: (can_infinite_jump(state, player) or (state.has("High Jump", player)
-                        and (state.has_any({"Air Slide", "Glide"}, player))) or (state.has("Flowmotion", player))
-                        and (#Macguffin check
-                            state.has_all({"Meow Wow Recipe", "Komory Bat Recipe", "Recusant Sigil"},player)
-                            and has_required_recipes(state, player, options.recipe_reqs)
-                        )))
+                        and (state.has_any({"Air Slide", "Glide"}, player))) or (state.has("Flowmotion", player))))
 
         add_rule(khdddworld.get_location("The World That Never Was Glossary: Recusant's Sigil Reward [Sora]"),
                  lambda state: (can_infinite_jump(state, player) or (state.has("High Jump", player)
-                        and (state.has_any({"Air Slide", "Glide"}, player))) or (state.has("Flowmotion", player))
-                        and (#Macguffin check
-                            state.has_all({"Meow Wow Recipe", "Komory Bat Recipe", "Recusant Sigil"},player)
-                            and has_required_recipes(state, player, options.recipe_reqs)
-                        )))
+                        and (state.has_any({"Air Slide", "Glide"}, player))) or (state.has("Flowmotion", player))))
 
         add_rule(khdddworld.get_location("The World That Never Was Glossary: Hearts Tied to Sora Reward [Sora]"),
                  lambda state: (can_infinite_jump(state, player) or (state.has("High Jump", player)
-                        and (state.has_any({"Air Slide", "Glide"}, player))) or (state.has("Flowmotion", player))
-                        and (#Macguffin check
-                            state.has_all({"Meow Wow Recipe", "Komory Bat Recipe", "Recusant Sigil"},player)
-                            and has_required_recipes(state, player, options.recipe_reqs)
-                        )))
+                        and (state.has_any({"Air Slide", "Glide"}, player))) or (state.has("Flowmotion", player))))
 
         add_rule(khdddworld.get_location("The World That Never Was Contorted City Ice Dream Cone 3 [Sora]"),
                  lambda state: (can_infinite_jump(state, player) or (state.has("Flowmotion", player))
                         or (state.has("High Jump", player) and (state.has_any({"Air Slide", "Glide"}, player)))))
+
+        #####Add Macguffin Rules#####
+        add_rule(khdddworld.get_location("The World That Never Was Xemnas Bonus Slot 1 [Sora]"),
+                 lambda state: has_macguffins(state, player, options.recipe_reqs))
+        add_rule(khdddworld.get_location("The World That Never Was Glossary: Recusant's Sigil Reward [Sora]"),
+                 lambda state: has_macguffins(state, player, options.recipe_reqs))
+        add_rule(khdddworld.get_location("The World That Never Was Glossary: Hearts Tied to Sora Reward [Sora]"),
+                 lambda state: has_macguffins(state, player, options.recipe_reqs))
 
     ###############################
     #########RIKU RULES############

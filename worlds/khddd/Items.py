@@ -879,7 +879,8 @@ item_data_table: Dict[str, KHDDDItemData] = {
     "Dark Barrier": KHDDDItemData(
         category = "Defense",
         code = 2681095,
-        type=ItemClassification.useful
+        type=ItemClassification.useful,
+        character = 2
     ),
     "Counter Rush": KHDDDItemData(
         category = "Defense",
