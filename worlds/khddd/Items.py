@@ -154,7 +154,7 @@ item_data_table: Dict[str, KHDDDItemData] = {
         code=269_1003,
         type=ItemClassification.progression,
         qty = 1,
-        character = 2
+        character = 1
     ),
     "Country of the Musketeers [Sora]": KHDDDItemData(
         category="World",
