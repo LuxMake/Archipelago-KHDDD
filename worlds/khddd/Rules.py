@@ -75,7 +75,7 @@ def has_required_recipes(state:CollectionState, player:int, num_of_recipes: int)
     return recipes_acquired >= num_of_recipes
 
 def has_macguffins(state:CollectionState, player:int, num_of_recipes) -> bool:
-    state.has_all({"Meow Wow Recipe", "Komory Bat Recipe", "Recusant Sigil"}, player) and has_required_recipes(state, player, num_of_recipes)
+    return state.has_all({"Meow Wow Recipe", "Komory Bat Recipe", "Recusant Sigil"}, player) and has_required_recipes(state, player, num_of_recipes)
 
 def can_infinite_jump(state: CollectionState, player: int) -> bool:
     return state.has_all({"Wall Kick", "Super Jump"}, player)
