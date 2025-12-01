@@ -34,21 +34,11 @@ class KHDDDClientCommandProcessor(ClientCommandProcessor):
     def __init__(self, ctx):
         super().__init__(ctx)
 
-    def _cmd_test(self):
-        """Test Command"""
-        self.output("Test output")
-
     def _cmd_drop(self):
         """Instantly drops the player."""
         global sendDDDCmd
         sendDDDCmd = 0
         self.output("Dropping player.")
-
-    def _cmd_kill(self):
-        """This should be removed before release"""
-        global sendDDDCmd
-        sendDDDCmd = 2
-        self.output("Deathlink triggered.")
 
     def _cmd_unstuck(self):
         """Sends the inactive character to the World Map."""
