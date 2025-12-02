@@ -218,7 +218,7 @@ async def game_watcher(ctx: KHDDDContext):
         #Check for game connection
         global dddConnected
         if dddConnected == -1:
-            logger.info("Searching for KHDDD Game Client...Please load your save file before Connecting.")
+            logger.info("Waiting for KHDDD Game Client...")
             dddConnected = 0
         elif dddConnected == 0:
             if ctx.socket.isConnected:
