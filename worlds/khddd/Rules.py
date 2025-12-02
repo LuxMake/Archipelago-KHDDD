@@ -78,17 +78,17 @@ def has_macguffins(state:CollectionState, player:int, num_of_recipes) -> bool:
     return state.has_all({"Meow Wow Recipe", "Komory Bat Recipe", "Recusant Sigil"}, player) and has_required_recipes(state, player, num_of_recipes)
 
 def can_infinite_jump(state: CollectionState, player: int) -> bool:
-    return state.has_all({"Wall Kick", "Super Jump"}, player)
+    return state.has_all({"Wall Kick", "Super Jump"}, player) or state.has("Flowmotion", player)
 
 def can_glide(state: CollectionState, player: int) -> bool:
-    return state.has_any({"Glide", "Superglide"}, player)
+    return state.has_any({"Glide", "Superglide"}, player) or state.has("Flowmotion", player)
 
 def can_pole_jump(state: CollectionState, player: int) -> bool:
-    return state.has_all({"Pole Swing", "Super Jump", "Air Slide"}, player)
+    return state.has_all({"Pole Swing", "Super Jump", "Air Slide"}, player) or state.has("Flowmotion", player)
 
 #Region-specific helpers
 def post_office_access(state: CollectionState, player: int) -> bool:
-    return state.has_any({"Wall Kick", "Glide", "Rail Slide"}, player)
+    return state.has_any({"Wall Kick", "Glide", "Rail Slide"}, player) or state.has("Flowmotion", player)
 
 def set_rules(khdddworld):
     multiworld = khdddworld.multiworld

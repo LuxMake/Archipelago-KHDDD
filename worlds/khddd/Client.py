@@ -4,6 +4,8 @@ import asyncio
 import time
 
 from calendar import timegm
+from types import NoneType
+from typing import Dict
 
 import ModuleUpdate
 ModuleUpdate.update()
@@ -70,6 +72,7 @@ class KHDDDContext(CommonContext):
     socket: KHDDDSocket = None
     check_location_IDs = []
     received_items_IDs = []
+    slot_data_info: Dict[str, str] = {}
 
     def __init__(self, server_address, password):
         super(KHDDDContext, self).__init__(server_address, password)
@@ -85,6 +88,7 @@ class KHDDDContext(CommonContext):
         await self.send_connect()
 
     async def connection_closed(self):
+        self.received_items_IDs = []
         await super(KHDDDContext, self).connection_closed()
         #for root, dirs, files in os.walk(self.game_communication_path):
         #    for file in files:
@@ -110,29 +114,39 @@ class KHDDDContext(CommonContext):
         if cmd in {"Connected"}:
             global slotDataSent
             if not slotDataSent:
-                if "keyblade_stats" in list(args['slot_data'].keys()):
-                    self.socket.send_slot_data(0, str(args['slot_data']['keyblade_stats']))
-                self.socket.send_slot_data(1, str(args['slot_data']['character']))
-                self.socket.send_slot_data(2, str(args['slot_data']['play_destiny_islands']))
-                self.socket.send_slot_data(3, str(args['slot_data']['exp_multiplier']))
-                self.socket.send_slot_data(4, str(args['slot_data']['skip_light_cycle']))
-                self.socket.send_slot_data(5, str(args['slot_data']['fast_go_mode']))
-                self.socket.send_slot_data(6, str(args['slot_data']['recipe_reqs']))
-                self.socket.send_slot_data(7, str(args['slot_data']['win_con']))
-                self.socket.send_slot_data(8, str(args['slot_data']['stat_bonus']))
-
-
-                slotDataSent = True
-            pass
+                if dddConnected > 0:
+                    if "keyblade_stats" in list(args['slot_data'].keys()):
+                        self.socket.send_slot_data(0, str(args['slot_data']['keyblade_stats']))
+                    self.socket.send_slot_data(1, str(args['slot_data']['character']))
+                    self.socket.send_slot_data(2, str(args['slot_data']['play_destiny_islands']))
+                    self.socket.send_slot_data(3, str(args['slot_data']['exp_multiplier']))
+                    self.socket.send_slot_data(4, str(args['slot_data']['skip_light_cycle']))
+                    self.socket.send_slot_data(5, str(args['slot_data']['fast_go_mode']))
+                    self.socket.send_slot_data(6, str(args['slot_data']['recipe_reqs']))
+                    self.socket.send_slot_data(7, str(args['slot_data']['win_con']))
+                    self.socket.send_slot_data(8, str(args['slot_data']['stat_bonus']))
+                    slotDataSent = True
+                else: #Hold slot data until game client connects
+                    if 'keyblade_stats' in list(args['slot_data'].keys()):
+                        self.slot_data_info['keyblade_stats'] = str(args['slot_data']['keyblade_stats'])
+                    self.slot_data_info['character'] = str(args['slot_data']['character'])
+                    self.slot_data_info['play_destiny_islands'] = str(args['slot_data']['play_destiny_islands'])
+                    self.slot_data_info['exp_multiplier'] = str(args['slot_data']['exp_multiplier'])
+                    self.slot_data_info['skip_light_cycle'] = str(args['slot_data']['skip_light_cycle'])
+                    self.slot_data_info['fast_go_mode'] = str(args['slot_data']['fast_go_mode'])
+                    self.slot_data_info['recipe_reqs'] = str(args['slot_data']['recipe_reqs'])
+                    self.slot_data_info['win_con'] = str(args['slot_data']['win_con'])
+                    self.slot_data_info['stat_bonus'] = str(args['slot_data']['stat_bonus'])
 
         if cmd in {"ReceivedItems"}:
             for item in args['items']:
-                self.received_items_IDs.append(NetworkItem(*item).item)
-            if len(args['items']) > 1:
-                self.socket.send_multipleItems(args['items'], len(self.received_items_IDs))
-            else:
-                self.socket.send_singleItem(args['items'][0].item, len(self.received_items_IDs))
-            pass
+                self.received_items_IDs.append(NetworkItem(*item))
+                #self.received_items_IDs.append(NetworkItem(*item).item)
+            if dddConnected > 0:
+                if len(args['items']) > 1:
+                    self.socket.send_multipleItems(args['items'], len(self.received_items_IDs))
+                else:
+                    self.socket.send_singleItem(args['items'][0].item, len(self.received_items_IDs))
 
 
     def on_deathlink(self, data: dict[str, object]):
@@ -158,9 +172,26 @@ class KHDDDContext(CommonContext):
         self.ui = KHDDDManager(self)
         self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")
 
+    def get_items(self):
+        self.socket.send_multipleItems(self.received_items_IDs, len(self.received_items_IDs))
+        global slotDataSent
+        if not slotDataSent:
+            if 'keyblade_stats' in self.slot_data_info.keys():
+                self.socket.send_slot_data(0, str(self.slot_data_info['keyblade_stats']))
+            self.socket.send_slot_data(1, str(self.slot_data_info['character']))
+            self.socket.send_slot_data(2, str(self.slot_data_info['play_destiny_islands']))
+            self.socket.send_slot_data(3, str(self.slot_data_info['exp_multiplier']))
+            self.socket.send_slot_data(4, str(self.slot_data_info['skip_light_cycle']))
+            self.socket.send_slot_data(5, str(self.slot_data_info['fast_go_mode']))
+            self.socket.send_slot_data(6, str(self.slot_data_info['recipe_reqs']))
+            self.socket.send_slot_data(7, str(self.slot_data_info['win_con']))
+            self.socket.send_slot_data(8, str(self.slot_data_info['stat_bonus']))
+            slotDataSent = True
+
+
+
 async def game_watcher(ctx: KHDDDContext):
     while not ctx.exit_event.is_set():
-        victory = False
 
         #Deathlink
         if deathLink and "DeathLink" not in ctx.tags:

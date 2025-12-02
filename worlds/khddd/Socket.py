@@ -100,6 +100,9 @@ class KHDDDSocket():
         elif msgType == MessageType.Victory:
             self.goaled = True
 
+        elif msgType == MessageType.RequestAllItems:
+            self.client.get_items()
+
     def send_singleItem(self, id: int, itemCnt):
         msgCont = [str(id), str(itemCnt)]
         self.send(MessageType.ReceiveSingleItem, msgCont)
