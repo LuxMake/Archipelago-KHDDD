@@ -433,11 +433,11 @@ def set_rules(khdddworld):
         ###########Traverse Town###########
         ###################################
         add_rule(khdddworld.get_location("Traverse Town Second District Block-It Chocolate [Riku]"),
-                 lambda state: state.has_any({"High Jump", "Double Flight"}, player) or can_infinite_jump(state, player))
+                 lambda state: state.has_any({"High Jump", "Double Flight", "Flowmotion"}, player) or can_infinite_jump(state, player))
         add_rule(khdddworld.get_location("Traverse Town Second District Balloon [Riku]"),
-                 lambda state: state.has_any({"High Jump", "Double Flight"}, player) or can_infinite_jump(state, player))
+                 lambda state: state.has_any({"High Jump", "Double Flight", "Flowmotion"}, player) or can_infinite_jump(state, player))
         add_rule(khdddworld.get_location("Traverse Town Second District Yoggy Ram Recipe [Riku]"),
-                 lambda state: state.has_any({"High Jump", "Double Flight"}, player) or can_infinite_jump(state, player))
+                 lambda state: state.has_any({"High Jump", "Double Flight", "Flowmotion"}, player) or can_infinite_jump(state, player))
 
         add_rule(khdddworld.get_location("Traverse Town Third District Ice Dream Cone [Riku]"),
                  lambda state: state.has_any({"Double Flight", "Flowmotion"}, player) or (
@@ -450,6 +450,9 @@ def set_rules(khdddworld):
         add_rule(khdddworld.get_location("Traverse Town Back Streets Intrepid Figment [Riku]"),
                  lambda state: state.has_all({"Double Flight", "Air Slide"}, player) or (
                      can_infinite_jump(state, player)) or state.has("Flowmotion", player))
+
+        add_rule(khdddworld.get_location("Traverse Town Garden Royal Cake [Riku]"),
+                 lambda state: state.has_any({"Rail Slide, Flowmotion"}, player) or can_infinite_jump(state, player))
 
         ###################################
         ########La Cite des Cloches########
