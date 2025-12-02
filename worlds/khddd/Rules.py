@@ -432,6 +432,13 @@ def set_rules(khdddworld):
         ###################################
         ###########Traverse Town###########
         ###################################
+        add_rule(khdddworld.get_location("Traverse Town Second District Block-It Chocolate [Riku]"),
+                 lambda state: state.has_any({"High Jump", "Double Flight"}, player) or can_infinite_jump(state, player))
+        add_rule(khdddworld.get_location("Traverse Town Second District Balloon [Riku]"),
+                 lambda state: state.has_any({"High Jump", "Double Flight"}, player) or can_infinite_jump(state, player))
+        add_rule(khdddworld.get_location("Traverse Town Second District Yoggy Ram Recipe [Riku]"),
+                 lambda state: state.has_any({"High Jump", "Double Flight"}, player) or can_infinite_jump(state, player))
+
         add_rule(khdddworld.get_location("Traverse Town Third District Ice Dream Cone [Riku]"),
                  lambda state: state.has_any({"Double Flight", "Flowmotion"}, player) or (
                      can_infinite_jump(state, player)) or state.has_all({"High Jump", "Wall Kick"}, player))
