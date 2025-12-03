@@ -173,7 +173,8 @@ class KHDDDContext(CommonContext):
         self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")
 
     def get_items(self):
-        self.socket.send_multipleItems(self.received_items_IDs, len(self.received_items_IDs))
+        if len(self.received_items_IDs) > 0:
+            self.socket.send_multipleItems(self.received_items_IDs, len(self.received_items_IDs))
         global slotDataSent
         if not slotDataSent:
             if 'keyblade_stats' in self.slot_data_info.keys():
