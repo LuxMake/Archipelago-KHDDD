@@ -668,10 +668,10 @@ def set_rules(khdddworld):
 
             if not options.fast_go_mode: #Additionally require Rail Slide
                 add_rule(khdddworld.get_location("The World That Never Was Young Xehanort Defeated [Riku]"),
-                         lambda state: state.has("Rail Slide", player))
+                         lambda state: state.has_any({"Rail Slide", "Flowmotion"}, player))
                 if options.armored_ventus_nightmare:
                     add_rule(khdddworld.get_location("Armored Ventus Nightmare Defeated [Riku]"),
-                         lambda state: state.has("Rail Slide", player))
+                         lambda state: state.has_any({"Rail Slide", "Flowmotion"}, player))
 
 
 
