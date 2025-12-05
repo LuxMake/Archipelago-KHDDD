@@ -4,7 +4,6 @@ import asyncio
 import time
 
 from calendar import timegm
-from types import NoneType
 from typing import Dict
 
 import ModuleUpdate
@@ -73,6 +72,7 @@ class KHDDDContext(CommonContext):
     check_location_IDs = []
     received_items_IDs = []
     slot_data_info: Dict[str, str] = {}
+    connectedToAp = False
 
     def __init__(self, server_address, password):
         super(KHDDDContext, self).__init__(server_address, password)
@@ -111,7 +111,9 @@ class KHDDDContext(CommonContext):
         self.socket.shutdown_server()
     
     def on_package(self, cmd: str, args: dict):
+        global dddConnected
         if cmd in {"Connected"}:
+            self.connectedToAp = True
             global slotDataSent
             if not slotDataSent:
                 if dddConnected > 0:
@@ -173,8 +175,12 @@ class KHDDDContext(CommonContext):
         self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")
 
     def get_items(self):
-        if len(self.received_items_IDs) > 0:
+
+        if len(self.received_items_IDs) > 1:
             self.socket.send_multipleItems(self.received_items_IDs, len(self.received_items_IDs))
+        elif len(self.received_items_IDs) == 1:
+            self.socket.send_singleItem(self.received_items_IDs[0].item, 1)
+
         global slotDataSent
         if not slotDataSent:
             if 'keyblade_stats' in self.slot_data_info.keys():
@@ -229,6 +235,7 @@ async def game_watcher(ctx: KHDDDContext):
             if ctx.socket.goaled and not ctx.finished_game:
                 await ctx.send_msgs([{"cmd": "StatusUpdate", "status": ClientStatus.CLIENT_GOAL}])
                 ctx.finished_game = True
+
 
         ctx.locations_checked = ctx.check_location_IDs
         message = [{"cmd": 'LocationChecks', "locations": ctx.check_location_IDs}]

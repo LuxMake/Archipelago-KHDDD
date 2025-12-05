@@ -16,6 +16,7 @@ class MessageType(IntEnum):
       PortalChecked = 9,
       SendSlotData = 10,
       Victory = 11,
+      Handshake = 12
       pass
 
 class SlotDataType(IntEnum):
@@ -102,6 +103,11 @@ class KHDDDSocket():
 
         elif msgType == MessageType.RequestAllItems:
             self.client.get_items()
+
+        elif msgType == MessageType.Handshake:
+            print("Attempting to respond to handshake")
+            self.send(MessageType.Handshake, [str(self.client.connectedToAp)])
+            print("Responded to Handshake")
 
     def send_singleItem(self, id: int, itemCnt):
         msgCont = [str(id), str(itemCnt)]
