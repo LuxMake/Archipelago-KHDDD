@@ -58,7 +58,7 @@ class RecipeReqs(Range):
     display_name = "Recipes Required"
     default = 2
     range_start = 2
-    range_end = 52
+    range_end = 54
 
 class RecipesInPool(Range):
     """
@@ -66,9 +66,9 @@ class RecipesInPool(Range):
     Always includes Meow Wow and Komory Bat recipes
     """
     display_name = "Recipes in the Item Pool"
-    default = 52
+    default = 54
     range_start = 2
-    range_end = 52
+    range_end = 54
 
 class Superbosses(Toggle):
     """

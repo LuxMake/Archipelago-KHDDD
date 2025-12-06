@@ -5,6 +5,7 @@ from worlds.generic.Rules import add_rule, add_item_rule
 from BaseClasses import ItemClassification
 
 from .Locations import KHDDDLocation, location_data_table
+from .Items import get_items_by_category
 
 if TYPE_CHECKING:
     from . import KHDDDWorld
@@ -58,20 +59,15 @@ def can_access_riku_portals(state:CollectionState, player:int) -> bool:
     return False
 
 def has_required_recipes(state:CollectionState, player:int, num_of_recipes: int) -> bool:
-    RECIPES = ["Meow Wow Recipe", "Tama Sheep Recipe", "Yoggy Ram Recipe", "Komory Bat Recipe", "Pricklemane Recipe", "Hebby Repp Recipe",
-               "Sir Kyroo Recipe", "Toximander Recipe", "Fin Fatale Recipe", "Tatsu Steed Recipe", "Necho Cat Recipe", "Thunderaffe Recipe",
-               "Kooma Panda Recipe", "Pegaslick Recipe", "Iceguin Ace Recipe", "Peepsta Hoo Recipe", "Escarglow Recipe", "KO Kabuto Recipe",
-               "Wheeflower Recipe", "Ghostabocky Recipe", "Zolephant Recipe", "Juggle Pup Recipe", "Halbird Recipe", "Staggerceps Recipe",
-               "Fishbone Recipe", "Flowbermeow Recipe", "Cyber Yog Recipe", "Chef Kyroo Recipe", "Lord Kyroo Recipe", "Tatsu Blaze Recipe",
-               "Electricorn Recipe", "Woeflower Recipe", "Jestabocky Recipe", "Eaglider Recipe", "Me Me Bunny Recipe", "Drill Sye Recipe",
-               "Tyranto Rex Recipe", "Majik Lapin Recipe", "Cera Terror Recipe", "Skelterwild Recipe", "Ducky Goose Recipe", "Aura Lion Recipe",
-               "Ryu Dragon Recipe", "Drak Quack Recipe", "Keeba Tiger Recipe", "Meowjesty Recipe", "Sudo Neku Recipe", "Frootz Cat Recipe",
-               "Ursa Circus Recipe", "Kab Kannon Recipe", "R & R Seal Recipe", "Catanuki Recipe", "Beatalike Recipe", "Tubguin Ace Recipe"]
+    RECIPES = []
+    for name, data in get_items_by_category("Recipe").items():
+        RECIPES.append(name)
 
-    recipes_acquired = 0.0
-    for i in range(len(RECIPES)):
-        if state.has(RECIPES[i], player):
-            recipes_acquired += 1.0
+    recipes_acquired = 0
+    for recipe in RECIPES:
+        if state.has(recipe, player):
+            recipes_acquired += 1
+
     return recipes_acquired >= num_of_recipes
 
 def has_macguffins(state:CollectionState, player:int, num_of_recipes) -> bool:
@@ -651,6 +647,17 @@ def set_rules(khdddworld):
         ###################################
         #####The World That Never Was######
         ###################################
+        add_rule(khdddworld.get_location("The World That Never Was Verge of Chaos Candy Goggles [Riku]"),
+                 lambda state: state.has_any({"Flowmotion", "Rail Slide"}, player) or can_infinite_jump(state, player))
+        add_rule(khdddworld.get_location("The World That Never Was Verge of Chaos Second Elixir [Riku]"),
+                 lambda state: state.has_any({"Flowmotion", "Rail Slide"}, player) or can_infinite_jump(state, player))
+        add_rule(khdddworld.get_location("The World That Never Was Verge of Chaos Shield Cookie 3 [Riku]"),
+                 lambda state: state.has_any({"Flowmotion", "Rail Slide"}, player) or can_infinite_jump(state, player))
+        add_rule(khdddworld.get_location("The World That Never Was Verge of Chaos Skelterwild Recipe [Riku]"),
+                 lambda state: state.has_any({"Flowmotion", "Rail Slide"}, player) or can_infinite_jump(state, player))
+        add_rule(khdddworld.get_location("The World That Never Was Verge of Chaos Wondrous Fantasy [Riku]"),
+                 lambda state: state.has_any({"Flowmotion", "Rail Slide"}, player) or can_infinite_jump(state, player))
+
         add_rule(khdddworld.get_location("The World That Never Was Ansem II Bonus Slot 1 [Riku]"),
                  lambda state: state.has_any({"Flowmotion", "Rail Slide"}, player) and state.has("Air Slide", player))
 
