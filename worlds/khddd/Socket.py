@@ -1,6 +1,7 @@
 from enum import IntEnum
 import asyncio
 import socket
+from CommonClient import logger
 
 class MessageType(IntEnum):
       Invalid = -1,
@@ -38,24 +39,50 @@ class KHDDDSocket():
         pass;
 
     async def start_server(self):
-        print("Starting server... waiting for game.")
+        self.loop = asyncio.get_event_loop()
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(1)
-        #self.client_socket, addr = self.server_socket.accept()
-        self.loop = asyncio.get_event_loop()
-        self.client_socket, addr = await self.loop.sock_accept(self.server_socket)
-        self.loop.create_task(self.listen())
-        self.isConnected = True
+        await self._accept_client()
 
+    async def _accept_client(self):
+        """Wait for a client to connect and start a listener task."""
+        logger.info("Waiting for KHDDD game connection...")
+        while True:
+            try:
+                self.client_socket, addr = await self.loop.sock_accept(self.server_socket)
+                self.isConnected = True
+                print(f"Client connected from {addr}")
+                self.loop.create_task(self.listen())
+                return
+            except OSError as e:
+                print(f"Socket accept failed ({e}); retrying in 5s")
+                await asyncio.sleep(5)
+
+    def _safe_close_client(self):
+        """Close the current client socket without killing the server socket."""
+        try:
+            if self.client_socket:
+                self.client_socket.close()
+        finally:
+            self.client_socket = None
+            self.isConnected = False
 
 
     async def listen(self):
         while True:
-            message = await self.loop.sock_recv(self.client_socket, 1024)
-            msgStr = message.decode("utf-8").replace("\n", "")
-            values = msgStr.split(";")
-            print("Received message: "+msgStr)
-            self.handle_message(values)
+            try:
+                message = await self.loop.sock_recv(self.client_socket, 1024)
+                if not message:
+                    raise ConnectionResetError("Client disconnected")
+                msgStr = message.decode("utf-8").replace("\n", "")
+                values = msgStr.split(";")
+                print("Received message: "+msgStr)
+                self.handle_message(values)
+            except (ConnectionResetError, OSError) as e:
+                logger.info(f"Connection lost, waiting for KHDDD to reconnect")
+                self._safe_close_client()
+                await self._accept_client()
+                return
 
     def send(self, msgId: int, values: list):
         msg = str(msgId)
