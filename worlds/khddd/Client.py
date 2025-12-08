@@ -1,9 +1,8 @@
 from __future__ import annotations
 import sys
 import asyncio
-import time
 
-from calendar import timegm
+from datetime import datetime, UTC, timedelta
 from typing import Dict
 
 import ModuleUpdate
@@ -207,7 +206,9 @@ async def game_watcher(ctx: KHDDDContext):
             await ctx.update_death_link(deathLink)
 
         if ctx.socket.deathTime != "" and deathLink:
-            if timegm(time.strptime(ctx.socket.deathTime, '%Y%m%d%H%M%S')) > ctx.last_death_link and int(time.time()) % int(timegm(time.strptime(ctx.socket.deathTime, '%Y%m%d%H%M%S'))) < 10:
+            death_time = datetime.strptime(ctx.socket.deathTime, '%Y%m%d%H%M%S').replace(tzinfo=UTC)
+            time_window = timedelta(seconds=10)
+            if (death_time + time_window).timestamp() > ctx.last_death_link:
                 logger.info(f"Sending deathlink...")
                 await ctx.send_death(death_text="Character defeated")
 
@@ -261,7 +262,7 @@ def launch():
         await ctx.shutdown()
 
     import colorama
-
+        
     parser = get_base_parser(description="KHDDD Client, for text interfacing.")
 
     args, rest = parser.parse_known_args()
