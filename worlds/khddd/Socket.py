@@ -51,11 +51,12 @@ class KHDDDSocket():
             try:
                 self.client_socket, addr = await self.loop.sock_accept(self.server_socket)
                 self.isConnected = True
-                print(f"Client connected from {addr}")
+                logger.info("KHDDD game client connected.")
                 self.loop.create_task(self.listen())
                 return
             except OSError as e:
                 print(f"Socket accept failed ({e}); retrying in 5s")
+                self.isConnected = False
                 await asyncio.sleep(5)
 
     def _safe_close_client(self):
@@ -79,18 +80,26 @@ class KHDDDSocket():
                 print("Received message: "+msgStr)
                 self.handle_message(values)
             except (ConnectionResetError, OSError) as e:
-                logger.info(f"Connection lost, waiting for KHDDD to reconnect")
+                logger.info(f"Connection to game lost, reconnecting...")
                 self._safe_close_client()
                 await self._accept_client()
                 return
 
     def send(self, msgId: int, values: list):
-        msg = str(msgId)
-        for val in values:
-            msg += ";" + str(val)
-        msg += "\n"
-        self.client_socket.send(msg.encode("utf-8"))
-        print("Sent message: "+msg)
+        if not self.isConnected or self.client_socket is None:
+            return
+        try:
+            msg = str(msgId)
+            for val in values:
+                msg += ";" + str(val)
+            msg += "\n"
+            self.client_socket.send(msg.encode("utf-8"))
+            print("Sent message: "+msg)
+        except (OSError, ConnectionResetError, BrokenPipeError) as e:
+            print(f"Error sending message {msgId}: {e}; connection may be lost")
+            self.isConnected = False
+        except Exception as e:
+            print(f"Error sending message {msgId}: {e}")
 
     def handle_message(self, message: list[str]):
         if message[0] == '':
