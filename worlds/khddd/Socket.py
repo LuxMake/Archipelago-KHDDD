@@ -17,7 +17,8 @@ class MessageType(IntEnum):
       PortalChecked = 9,
       SendSlotData = 10,
       Victory = 11,
-      Handshake = 12
+      Handshake = 12,
+      ItemReceivedConfirmation = 13
       pass
 
 class SlotDataType(IntEnum):
@@ -27,6 +28,17 @@ class SlotDataType(IntEnum):
     Exp = 3,
 
 class KHDDDSocket():
+    @property
+    def isConnected(self) -> bool:
+        if self.client:
+            return self.client.connectedToDDD
+        else:
+            return False
+    @isConnected.setter
+    def isConnected(self, value: bool):
+        if self.client:
+            self.client.connectedToDDD = value
+
     def __init__(self, client, host: str = "127.0.0.1", port:int = 13713):
         self.client: KHDDDContext = client
         self.host: str = host
@@ -34,11 +46,12 @@ class KHDDDSocket():
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket = None
         self.deathTime = ""
-        self.isConnected = False
         self.goaled = False
         pass;
 
+
     async def start_server(self):
+        logger.debug("Starting server... waiting for game.")
         self.loop = asyncio.get_event_loop()
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(1)
@@ -50,9 +63,10 @@ class KHDDDSocket():
         while True:
             try:
                 self.client_socket, addr = await self.loop.sock_accept(self.server_socket)
-                self.isConnected = True
                 logger.info("KHDDD game client connected.")
+                self.isConnected = True
                 self.loop.create_task(self.listen())
+                self.client.get_items()
                 return
             except OSError as e:
                 print(f"Socket accept failed ({e}); retrying in 5s")
@@ -77,7 +91,7 @@ class KHDDDSocket():
                     raise ConnectionResetError("Client disconnected")
                 msgStr = message.decode("utf-8").replace("\n", "")
                 values = msgStr.split(";")
-                print("Received message: "+msgStr)
+                logger.debug("Received message: "+msgStr)
                 self.handle_message(values)
             except (ConnectionResetError, OSError) as e:
                 logger.info(f"Connection to game lost, reconnecting...")
@@ -94,27 +108,27 @@ class KHDDDSocket():
                 msg += ";" + str(val)
             msg += "\n"
             self.client_socket.send(msg.encode("utf-8"))
-            print("Sent message: "+msg)
+            logger.debug("Sent message: "+msg)
         except (OSError, ConnectionResetError, BrokenPipeError) as e:
-            print(f"Error sending message {msgId}: {e}; connection may be lost")
+            logger.debug(f"Error sending message {msgId}: {e}; connection may be lost")
             self.isConnected = False
         except Exception as e:
-            print(f"Error sending message {msgId}: {e}")
+            logger.debug(f"Error sending message {msgId}: {e}")
 
     def handle_message(self, message: list[str]):
         if message[0] == '':
             return
 
-        print("Handling message: "+str(message))
+        logger.debug("Handling message: "+str(message))
         msgType = MessageType(int(message[0]))
 
         if msgType == MessageType.ChestChecked:
             locid = int(message[1])
             self.client.check_location_IDs.append(locid)
-            print("Chest location checked: "+str(locid))
+            logger.debug("Chest location checked: "+str(locid))
 
         elif msgType == MessageType.LevelChecked:
-            print("Level checked")
+            logger.debug("Level checked")
             self.client.check_location_IDs.append(int(message[1]))
 
         elif msgType == MessageType.StoryChecked:
@@ -122,14 +136,14 @@ class KHDDDSocket():
                 if len(x) > 1:
                     locid = int(x)
                     self.client.check_location_IDs.append(locid)
-                    print("Story location checked: " + str(locid))
+                    logger.debug("Story location checked: " + str(locid))
 
         elif msgType == MessageType.PortalChecked:
             for x in message:
                 if len(x) > 1:
                     locid = int(x)
                     self.client.check_location_IDs.append(locid)
-                    print("Secret portal location checked: " + str(locid))
+                    logger.debug("Secret portal location checked: " + str(locid))
 
         elif msgType == MessageType.Deathlink:
             self.deathTime = message[1]
@@ -141,9 +155,18 @@ class KHDDDSocket():
             self.client.get_items()
 
         elif msgType == MessageType.Handshake:
-            print("Attempting to respond to handshake")
+            logger.debug("Attempting to respond to handshake")
             self.send(MessageType.Handshake, [str(self.client.connectedToAp)])
-            print("Responded to Handshake")
+            logger.debug("Responded to Handshake")
+
+        elif msgType == MessageType.ItemReceivedConfirmation:
+            if len(message) > 1:
+                try:
+                    confirmed_index = int(message[1])
+                    self.client.update_confirmed_items_index(confirmed_index)
+                    logger.debug(f"Received confirmation for items up to index {confirmed_index}")
+                except (ValueError, IndexError) as e:
+                    logger.debug(f"Error parsing item confirmation: {e}")
 
     def send_singleItem(self, id: int, itemCnt):
         msgCont = [str(id), str(itemCnt)]
@@ -151,7 +174,7 @@ class KHDDDSocket():
 
 
     def send_multipleItems(self, items, itemCnt):
-        print(f"Sending multiple items {len(items)}")
+        logger.debug(f"Sending multiple items {len(items)}")
         values = []
 
         msgLimit = 3 #Need to cap how long each message can be to prevent data from being lost
@@ -200,7 +223,7 @@ class KHDDDSocket():
         values = [str(cmdId)]
         if extParam != "":
             values.append(extParam)
-        print(f"Sending client command to player: {cmdId}")
+        logger.debug(f"Sending client command to player: {cmdId}")
         self.send(MessageType.ClientCommand, values)
 
     def shutdown_server(self):

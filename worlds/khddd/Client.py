@@ -1,5 +1,7 @@
 from __future__ import annotations
 import sys
+import os
+import json
 import asyncio
 
 from datetime import datetime, UTC, timedelta
@@ -13,7 +15,6 @@ item_num = 1
 
 deathLink = False
 sendDDDCmd = -1
-dddConnected = -1
 slotDataSent = False
 
 from .Socket import KHDDDSocket
@@ -71,10 +72,20 @@ class KHDDDContext(CommonContext):
     check_location_IDs = []
     received_items_IDs = []
     slot_data_info: Dict[str, str] = {}
-    connectedToAp = False
+    _connectedToAp: bool = False
+    _connectedToDDD: bool = False
+    _confirmed_items_index: int = 0
+    _save_file_path: str = None
 
-    def __init__(self, server_address, password):
+    def __init__(self, server_address, password, ready_callback=None, error_callback=None):
         super(KHDDDContext, self).__init__(server_address, password)
+
+        # Initialize save file path for tracking confirmed items
+        # Use username to create per-slot save file
+        save_filename = f"khddd_confirmed_items_{self.username}.json"
+        self._save_file_path = Utils.user_path("apkhddd", save_filename)
+        os.makedirs(os.path.dirname(self._save_file_path), exist_ok=True)
+        self._load_confirmed_items_index()
 
         #Socket
         self.socket = KHDDDSocket(self)
@@ -89,14 +100,51 @@ class KHDDDContext(CommonContext):
     async def connection_closed(self):
         self.received_items_IDs = []
         await super(KHDDDContext, self).connection_closed()
-        #for root, dirs, files in os.walk(self.game_communication_path):
-        #    for file in files:
-        #        if file.find("obtain") <= -1:
-        #            os.remove(root + "/" + file)
-        #global item_num
-        #item_num = 1
 
+    def _load_confirmed_items_index(self):
+        """Load the last confirmed items index from local save file."""
+        try:
+            if os.path.exists(self._save_file_path):
+                with open(self._save_file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self._confirmed_items_index = data.get('confirmed_index', 0)
+                    logger.debug(f"Loaded confirmed items index: {self._confirmed_items_index}")
+            else:
+                self._confirmed_items_index = 0
+                logger.debug("No save file found, starting with index 0")
+        except (json.JSONDecodeError, IOError, KeyError) as e:
+            logger.warning(f"Error loading confirmed items index: {e}, starting fresh")
+            self._confirmed_items_index = 0
 
+    def _save_confirmed_items_index(self):
+        """Save the confirmed items index to local save file."""
+        try:
+            data = {'confirmed_index': self._confirmed_items_index}
+            with open(self._save_file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            logger.debug(f"Saved confirmed items index: {self._confirmed_items_index}")
+        except IOError as e:
+            logger.warning(f"Error saving confirmed items index: {e}")
+
+    def update_confirmed_items_index(self, new_index: int):
+        """Update the confirmed items index and save to file."""
+        if new_index > self._confirmed_items_index:
+            self._confirmed_items_index = new_index
+            self._save_confirmed_items_index()
+
+    @property
+    def connectedToAp(self) -> bool:
+        return self._connectedToAp
+    @connectedToAp.setter
+    def connectedToAp(self, value: bool):
+        self._connectedToAp = value
+
+    @property
+    def connectedToDDD(self) -> bool:
+        return self._connectedToDDD
+    @connectedToDDD.setter
+    def connectedToDDD(self, value: bool):
+        self._connectedToDDD = value
 
     @property
     def endpoints(self):
@@ -110,12 +158,11 @@ class KHDDDContext(CommonContext):
         self.socket.shutdown_server()
     
     def on_package(self, cmd: str, args: dict):
-        global dddConnected
         if cmd in {"Connected"}:
             self.connectedToAp = True
             global slotDataSent
             if not slotDataSent:
-                if dddConnected > 0:
+                if self.connectedToDDD:
                     if "keyblade_stats" in list(args['slot_data'].keys()):
                         self.socket.send_slot_data(0, str(args['slot_data']['keyblade_stats']))
                     self.socket.send_slot_data(1, str(args['slot_data']['character']))
@@ -139,15 +186,6 @@ class KHDDDContext(CommonContext):
                     self.slot_data_info['win_con'] = str(args['slot_data']['win_con'])
                     self.slot_data_info['stat_bonus'] = str(args['slot_data']['stat_bonus'])
 
-        if cmd in {"ReceivedItems"}:
-            for item in args['items']:
-                self.received_items_IDs.append(NetworkItem(*item))
-                #self.received_items_IDs.append(NetworkItem(*item).item)
-            if dddConnected > 0:
-                if len(args['items']) > 1:
-                    self.socket.send_multipleItems(args['items'], len(self.received_items_IDs))
-                else:
-                    self.socket.send_singleItem(args['items'][0].item, len(self.received_items_IDs))
 
 
     def on_deathlink(self, data: dict[str, object]):
@@ -174,11 +212,24 @@ class KHDDDContext(CommonContext):
         self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")
 
     def get_items(self):
+        """Send unconfirmed items to the game client."""
+        # Get items that haven't been confirmed as received by the game
+        unconfirmed_items = []
+        for i, item in enumerate(self.items_received):
+            # Only send items after the confirmed index
+            if i >= self._confirmed_items_index:
+                unconfirmed_items.append(item)
 
-        if len(self.received_items_IDs) > 1:
-            self.socket.send_multipleItems(self.received_items_IDs, len(self.received_items_IDs))
-        elif len(self.received_items_IDs) == 1:
-            self.socket.send_singleItem(self.received_items_IDs[0].item, 1)
+        if not unconfirmed_items:
+            logger.debug("No unconfirmed items to send")
+            return
+
+        logger.debug(f"Sending {len(unconfirmed_items)} unconfirmed items (confirmed index: {self._confirmed_items_index}, total items: {len(self.items_received)})")
+
+        if len(unconfirmed_items) > 1:
+            self.socket.send_multipleItems(unconfirmed_items, len(self.items_received))
+        else:
+            self.socket.send_singleItem(unconfirmed_items[0].item, len(self.items_received))
 
         global slotDataSent
         if not slotDataSent:
@@ -199,49 +250,36 @@ class KHDDDContext(CommonContext):
 async def game_watcher(ctx: KHDDDContext):
     while not ctx.exit_event.is_set():
 
-        #Deathlink
-        if deathLink and "DeathLink" not in ctx.tags:
-            await ctx.update_death_link(deathLink)
-        if not deathLink and "DeathLink" in ctx.tags:
-            await ctx.update_death_link(deathLink)
+            #Deathlink
+            if deathLink and "DeathLink" not in ctx.tags:
+                await ctx.update_death_link(deathLink)
+            if not deathLink and "DeathLink" in ctx.tags:
+                await ctx.update_death_link(deathLink)
 
-        if ctx.socket.deathTime != "" and deathLink:
-            death_time = datetime.strptime(ctx.socket.deathTime, '%Y%m%d%H%M%S').replace(tzinfo=UTC)
-            time_window = timedelta(seconds=10)
-            if (death_time + time_window).timestamp() > ctx.last_death_link:
-                logger.info(f"Sending deathlink...")
-                await ctx.send_death(death_text="Character defeated")
+            if ctx.socket.deathTime != "" and deathLink:
+                death_time = datetime.strptime(ctx.socket.deathTime, '%Y%m%d%H%M%S').replace(tzinfo=UTC)
+                time_window = timedelta(seconds=10)
+                if (death_time + time_window).timestamp() > ctx.last_death_link:
+                    logger.info(f"Sending deathlink...")
+                    await ctx.send_death(death_text="Character defeated")
 
+            #Send a command to the game
+            global sendDDDCmd
+            if sendDDDCmd > -1:
+                if (sendDDDCmd == 3):
+                    ctx.socket.send_client_cmd(sendDDDCmd, str(deathLink))
+                else:
+                    ctx.socket.send_client_cmd(sendDDDCmd, "")
+                sendDDDCmd = -1
 
-
-        #Send a command to the game
-        global sendDDDCmd
-        if sendDDDCmd > -1:
-            if (sendDDDCmd == 3):
-                ctx.socket.send_client_cmd(sendDDDCmd, str(deathLink))
-            else:
-                ctx.socket.send_client_cmd(sendDDDCmd, "")
-            sendDDDCmd = -1
-
-        #Check for game connection
-        global dddConnected
-        if dddConnected == -1:
-            logger.info("Waiting for KHDDD Game Client...")
-            dddConnected = 0
-        elif dddConnected == 0:
-            if ctx.socket.isConnected:
-                logger.info(f"KHDDD Game Client Found")
-                dddConnected = 1
-        elif dddConnected == 1: #Check for game completion
             if ctx.socket.goaled and not ctx.finished_game:
                 await ctx.send_msgs([{"cmd": "StatusUpdate", "status": ClientStatus.CLIENT_GOAL}])
                 ctx.finished_game = True
 
-
-        ctx.locations_checked = ctx.check_location_IDs
-        message = [{"cmd": 'LocationChecks', "locations": ctx.check_location_IDs}]
-        await ctx.send_msgs(message)
-        await asyncio.sleep(0.5)
+            ctx.locations_checked = ctx.check_location_IDs
+            message = [{"cmd": 'LocationChecks', "locations": ctx.check_location_IDs}]
+            await ctx.send_msgs(message)
+            await asyncio.sleep(0.5)
 
 def launch():
 
@@ -252,7 +290,7 @@ def launch():
             ctx.run_gui()
         ctx.run_cli()
         progression_watcher = asyncio.create_task(
-                game_watcher(ctx), name="KHDDDProgressionWatcher")
+            game_watcher(ctx), name="KHDDDProgressionWatcher")
 
         await ctx.exit_event.wait()
         ctx.server_address = None
