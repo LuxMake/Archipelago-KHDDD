@@ -88,6 +88,10 @@ class KHDDDContext(CommonContext):
 
     async def connection_closed(self):
         self.received_items_IDs = []
+        global dddConnected
+        dddConnected = -1
+        global slotDataSent
+        slotDataSent = False
         await super(KHDDDContext, self).connection_closed()
         #for root, dirs, files in os.walk(self.game_communication_path):
         #    for file in files:
@@ -107,6 +111,7 @@ class KHDDDContext(CommonContext):
 
     async def shutdown(self):
         await super(KHDDDContext, self).shutdown()
+        self.socket.send(20, ["Closing"])
         self.socket.shutdown_server()
     
     def on_package(self, cmd: str, args: dict):
