@@ -46,12 +46,9 @@ class KHDDDClientCommandProcessor(ClientCommandProcessor):
     def _cmd_deathlink(self):
         """Toggles Deathlink"""
         self.ctx.death_link = not self.ctx.death_link
-        self.ctx.update_death_link(self.ctx.death_link)
+        asyncio.create_task(self.ctx.update_death_link(self.ctx.death_link)).add_done_callback(
+            lambda _: self.output(f"Death Link turned {'on' if self.ctx.death_link else 'off'}"))
         self.ctx.socket.send_client_cmd(DDDCommand.DEATH_LINK, str(self.ctx.death_link))
-        if self.ctx.death_link:
-            self.output(f"Death Link turned on")
-        else:
-            self.output(f"Death Link turned off")
 
 
 
