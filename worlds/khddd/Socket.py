@@ -18,7 +18,7 @@ class MessageType(IntEnum):
       SendSlotData = 10,
       Victory = 11,
       Handshake = 12,
-      ItemReceivedConfirmation = 13
+      Closed = 20
       pass
 
 class SlotDataType(IntEnum):

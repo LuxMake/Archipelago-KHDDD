@@ -99,6 +99,10 @@ class KHDDDContext(CommonContext):
 
     async def connection_closed(self):
         self.received_items_IDs = []
+        global dddConnected
+        dddConnected = -1
+        global slotDataSent
+        slotDataSent = False
         await super(KHDDDContext, self).connection_closed()
 
     def _load_confirmed_items_index(self):
@@ -155,6 +159,7 @@ class KHDDDContext(CommonContext):
 
     async def shutdown(self):
         await super(KHDDDContext, self).shutdown()
+        self.socket.send(20, ["Closing"])
         self.socket.shutdown_server()
     
     def on_package(self, cmd: str, args: dict):
