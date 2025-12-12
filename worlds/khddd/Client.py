@@ -4,7 +4,9 @@ import os
 import json
 import asyncio
 
+
 from datetime import datetime, UTC, timedelta
+from enum import Enum
 from typing import Dict
 
 import ModuleUpdate
@@ -13,11 +15,7 @@ ModuleUpdate.update()
 import Utils
 item_num = 1
 
-deathLink = False
-sendDDDCmd = -1
-slotDataSent = False
-
-from .Socket import KHDDDSocket
+from .Socket import KHDDDSocket, SlotDataType, DDDCommand
 
 if __name__ == "__main__":
     Utils.init_logging("KHDDDClient", exception_logger="Client")
@@ -37,28 +35,23 @@ class KHDDDClientCommandProcessor(ClientCommandProcessor):
 
     def _cmd_drop(self):
         """Instantly drops the player."""
-        global sendDDDCmd
-        sendDDDCmd = 0
+        self.ctx.socket.send_client_cmd(DDDCommand.DROP, "")
         self.output("Dropping player.")
 
     def _cmd_unstuck(self):
         """Sends the inactive character to the World Map."""
-        global sendDDDCmd
-        sendDDDCmd = 1
+        self.ctx.socket.send_client_cmd(DDDCommand.UNSTUCK, "")
         self.output("Sending inactive character to the World Map.")
 
     def _cmd_deathlink(self):
         """Toggles Deathlink"""
-        global deathLink
-        global sendDDDCmd
-        if deathLink:
-            deathLink = False
-            self.output(f"Death Link turned off")
-            sendDDDCmd = 3
-        else:
-            deathLink = True
-            sendDDDCmd = 3
+        self.ctx.death_link = not self.ctx.death_link
+        self.ctx.update_death_link(self.ctx.death_link)
+        self.ctx.socket.send_client_cmd(DDDCommand.DEATH_LINK, str(self.ctx.death_link))
+        if self.ctx.death_link:
             self.output(f"Death Link turned on")
+        else:
+            self.output(f"Death Link turned off")
 
 
 
@@ -66,26 +59,17 @@ class KHDDDContext(CommonContext):
     command_processor: int = KHDDDClientCommandProcessor
     game = "Kingdom Hearts Dream Drop Distance"
     items_handling = 0b111 #Attempt full remote
+    death_link: bool = False
 
     #Vars for socket
     socket: KHDDDSocket = None
     check_location_IDs = []
-    received_items_IDs = []
     slot_data_info: Dict[str, str] = {}
     _connectedToAp: bool = False
     _connectedToDDD: bool = False
-    _confirmed_items_index: int = 0
-    _save_file_path: str = None
 
-    def __init__(self, server_address, password, ready_callback=None, error_callback=None):
+    def __init__(self, server_address, password):
         super(KHDDDContext, self).__init__(server_address, password)
-
-        # Initialize save file path for tracking confirmed items
-        # Use username to create per-slot save file
-        save_filename = f"khddd_confirmed_items_{self.username}.json"
-        self._save_file_path = Utils.user_path("apkhddd", save_filename)
-        os.makedirs(os.path.dirname(self._save_file_path), exist_ok=True)
-        self._load_confirmed_items_index()
 
         #Socket
         self.socket = KHDDDSocket(self)
@@ -98,43 +82,9 @@ class KHDDDContext(CommonContext):
         await self.send_connect()
 
     async def connection_closed(self):
-        self.received_items_IDs = []
-        global dddConnected
-        dddConnected = -1
-        global slotDataSent
-        slotDataSent = False
         await super(KHDDDContext, self).connection_closed()
-
-    def _load_confirmed_items_index(self):
-        """Load the last confirmed items index from local save file."""
-        try:
-            if os.path.exists(self._save_file_path):
-                with open(self._save_file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self._confirmed_items_index = data.get('confirmed_index', 0)
-                    logger.debug(f"Loaded confirmed items index: {self._confirmed_items_index}")
-            else:
-                self._confirmed_items_index = 0
-                logger.debug("No save file found, starting with index 0")
-        except (json.JSONDecodeError, IOError, KeyError) as e:
-            logger.warning(f"Error loading confirmed items index: {e}, starting fresh")
-            self._confirmed_items_index = 0
-
-    def _save_confirmed_items_index(self):
-        """Save the confirmed items index to local save file."""
-        try:
-            data = {'confirmed_index': self._confirmed_items_index}
-            with open(self._save_file_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2)
-            logger.debug(f"Saved confirmed items index: {self._confirmed_items_index}")
-        except IOError as e:
-            logger.warning(f"Error saving confirmed items index: {e}")
-
-    def update_confirmed_items_index(self, new_index: int):
-        """Update the confirmed items index and save to file."""
-        if new_index > self._confirmed_items_index:
-            self._confirmed_items_index = new_index
-            self._save_confirmed_items_index()
+        self.connectedToAp = False
+        self.slot_data_info = {}
 
     @property
     def connectedToAp(self) -> bool:
@@ -162,35 +112,11 @@ class KHDDDContext(CommonContext):
         self.socket.send(20, ["Closing"])
         self.socket.shutdown_server()
     
-    def on_package(self, cmd: str, args: dict):
+    async def on_package(self, cmd: str, args: dict):
         if cmd in {"Connected"}:
             self.connectedToAp = True
-            global slotDataSent
-            if not slotDataSent:
-                if self.connectedToDDD:
-                    if "keyblade_stats" in list(args['slot_data'].keys()):
-                        self.socket.send_slot_data(0, str(args['slot_data']['keyblade_stats']))
-                    self.socket.send_slot_data(1, str(args['slot_data']['character']))
-                    self.socket.send_slot_data(2, str(args['slot_data']['play_destiny_islands']))
-                    self.socket.send_slot_data(3, str(args['slot_data']['exp_multiplier']))
-                    self.socket.send_slot_data(4, str(args['slot_data']['skip_light_cycle']))
-                    self.socket.send_slot_data(5, str(args['slot_data']['fast_go_mode']))
-                    self.socket.send_slot_data(6, str(args['slot_data']['recipe_reqs']))
-                    self.socket.send_slot_data(7, str(args['slot_data']['win_con']))
-                    self.socket.send_slot_data(8, str(args['slot_data']['stat_bonus']))
-                    slotDataSent = True
-                else: #Hold slot data until game client connects
-                    if 'keyblade_stats' in list(args['slot_data'].keys()):
-                        self.slot_data_info['keyblade_stats'] = str(args['slot_data']['keyblade_stats'])
-                    self.slot_data_info['character'] = str(args['slot_data']['character'])
-                    self.slot_data_info['play_destiny_islands'] = str(args['slot_data']['play_destiny_islands'])
-                    self.slot_data_info['exp_multiplier'] = str(args['slot_data']['exp_multiplier'])
-                    self.slot_data_info['skip_light_cycle'] = str(args['slot_data']['skip_light_cycle'])
-                    self.slot_data_info['fast_go_mode'] = str(args['slot_data']['fast_go_mode'])
-                    self.slot_data_info['recipe_reqs'] = str(args['slot_data']['recipe_reqs'])
-                    self.slot_data_info['win_con'] = str(args['slot_data']['win_con'])
-                    self.slot_data_info['stat_bonus'] = str(args['slot_data']['stat_bonus'])
-
+            self.slot_data_info = args['slot_data']
+            await self.send_slot_data()
 
 
     def on_deathlink(self, data: dict[str, object]):
@@ -216,66 +142,40 @@ class KHDDDContext(CommonContext):
         self.ui = KHDDDManager(self)
         self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")
 
-    def get_items(self):
-        """Send unconfirmed items to the game client."""
-        # Get items that haven't been confirmed as received by the game
-        unconfirmed_items = []
-        for i, item in enumerate(self.items_received):
-            # Only send items after the confirmed index
-            if i >= self._confirmed_items_index:
-                unconfirmed_items.append(item)
+    async def get_items(self):
+        """Send all received items to the game client."""
+        while not self.exit_event.is_set():
+            if self.connectedToAp and self.items_received:
+                self.socket.send_multipleItems(self.items_received, len(self.items_received))
+                return
+            asyncio.sleep(5)
 
-        if not unconfirmed_items:
-            logger.debug("No unconfirmed items to send")
-            return
-
-        logger.debug(f"Sending {len(unconfirmed_items)} unconfirmed items (confirmed index: {self._confirmed_items_index}, total items: {len(self.items_received)})")
-
-        if len(unconfirmed_items) > 1:
-            self.socket.send_multipleItems(unconfirmed_items, len(self.items_received))
-        else:
-            self.socket.send_singleItem(unconfirmed_items[0].item, len(self.items_received))
-
-        global slotDataSent
-        if not slotDataSent:
-            if 'keyblade_stats' in self.slot_data_info.keys():
-                self.socket.send_slot_data(0, str(self.slot_data_info['keyblade_stats']))
-            self.socket.send_slot_data(1, str(self.slot_data_info['character']))
-            self.socket.send_slot_data(2, str(self.slot_data_info['play_destiny_islands']))
-            self.socket.send_slot_data(3, str(self.slot_data_info['exp_multiplier']))
-            self.socket.send_slot_data(4, str(self.slot_data_info['skip_light_cycle']))
-            self.socket.send_slot_data(5, str(self.slot_data_info['fast_go_mode']))
-            self.socket.send_slot_data(6, str(self.slot_data_info['recipe_reqs']))
-            self.socket.send_slot_data(7, str(self.slot_data_info['win_con']))
-            self.socket.send_slot_data(8, str(self.slot_data_info['stat_bonus']))
-            slotDataSent = True
-
+    async def send_slot_data(self):
+        while not self.exit_event.is_set():
+            if not self.connectedToDDD:
+                await asyncio.sleep(5)
+                continue
+            elif self.slot_data_info:
+                for key, value in self.slot_data_info.items():
+                    if key in SlotDataType.__members__.keys():
+                        self.socket.send_slot_data(SlotDataType[key], str(value))
 
 
 async def game_watcher(ctx: KHDDDContext):
     while not ctx.exit_event.is_set():
+        try:
+            if not ctx.connectedToDDD:
+                await asyncio.sleep(5)     
+                continue
 
-            #Deathlink
-            if deathLink and "DeathLink" not in ctx.tags:
-                await ctx.update_death_link(deathLink)
-            if not deathLink and "DeathLink" in ctx.tags:
-                await ctx.update_death_link(deathLink)
-
-            if ctx.socket.deathTime != "" and deathLink:
-                death_time = datetime.strptime(ctx.socket.deathTime, '%Y%m%d%H%M%S').replace(tzinfo=UTC)
-                time_window = timedelta(seconds=10)
-                if (death_time + time_window).timestamp() > ctx.last_death_link:
+            if ctx.socket.deathTime != "" and ctx.death_link:
+                # New death detected, parse deathTime as local datetime
+                death_time = datetime.strptime(ctx.socket.deathTime, '%Y%m%d%H%M%S')
+                ctx.socket.deathTime = ""
+                time_window = timedelta(seconds=20)
+                if death_time + time_window >= datetime.now():
                     logger.info(f"Sending deathlink...")
-                    await ctx.send_death(death_text="Character defeated")
-
-            #Send a command to the game
-            global sendDDDCmd
-            if sendDDDCmd > -1:
-                if (sendDDDCmd == 3):
-                    ctx.socket.send_client_cmd(sendDDDCmd, str(deathLink))
-                else:
-                    ctx.socket.send_client_cmd(sendDDDCmd, "")
-                sendDDDCmd = -1
+                    await ctx.send_death(death_text=f"{ctx.username} fell to a nightmare")
 
             if ctx.socket.goaled and not ctx.finished_game:
                 await ctx.send_msgs([{"cmd": "StatusUpdate", "status": ClientStatus.CLIENT_GOAL}])
@@ -285,6 +185,12 @@ async def game_watcher(ctx: KHDDDContext):
             message = [{"cmd": 'LocationChecks', "locations": ctx.check_location_IDs}]
             await ctx.send_msgs(message)
             await asyncio.sleep(0.5)
+
+
+        except Exception as e:
+            logger.error(f"Error in game watcher: {e}")
+            ctx.connectedToDDD = False
+            continue
 
 def launch():
 

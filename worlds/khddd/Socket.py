@@ -4,28 +4,38 @@ import socket
 from CommonClient import logger
 
 class MessageType(IntEnum):
-      Invalid = -1,
-      Test = 0,
-      ChestChecked = 1,
-      LevelChecked = 2,
-      ReceiveAllItems = 3,
-      RequestAllItems = 4,
-      ReceiveSingleItem = 5,
-      StoryChecked = 6,
-      ClientCommand = 7,
-      Deathlink = 8,
-      PortalChecked = 9,
-      SendSlotData = 10,
-      Victory = 11,
-      Handshake = 12,
-      Closed = 20
-      pass
+    Invalid = -1
+    Test = 0
+    ChestChecked = 1
+    LevelChecked = 2
+    ReceiveAllItems = 3
+    RequestAllItems = 4
+    ReceiveSingleItem = 5
+    StoryChecked = 6
+    ClientCommand = 7
+    Deathlink = 8
+    PortalChecked = 9
+    SendSlotData = 10
+    Victory = 11
+    Handshake = 12
+    ItemReceivedConfirmation = 13
 
+class DDDCommand(IntEnum):
+    DROP = 0
+    UNSTUCK = 1
+    DEATH_LINK = 3
+
+# using slot data keys for the enum values
 class SlotDataType(IntEnum):
-    KeybladeStats = 0,
-    Character = 1,
-    SkipDI = 2,
-    Exp = 3,
+    keyblade_stats = 0
+    character = 1
+    play_destiny_islands = 2
+    exp_multiplier = 3
+    skip_light_cycle = 4
+    fast_go_mode = 5
+    recipe_reqs = 6
+    win_con = 7
+    stat_bonus = 8
 
 class KHDDDSocket():
     @property
@@ -66,7 +76,7 @@ class KHDDDSocket():
                 logger.info("KHDDD game client connected.")
                 self.isConnected = True
                 self.loop.create_task(self.listen())
-                self.client.get_items()
+                await self.client.get_items()
                 return
             except OSError as e:
                 print(f"Socket accept failed ({e}); retrying in 5s")
@@ -159,14 +169,6 @@ class KHDDDSocket():
             self.send(MessageType.Handshake, [str(self.client.connectedToAp)])
             logger.debug("Responded to Handshake")
 
-        elif msgType == MessageType.ItemReceivedConfirmation:
-            if len(message) > 1:
-                try:
-                    confirmed_index = int(message[1])
-                    self.client.update_confirmed_items_index(confirmed_index)
-                    logger.debug(f"Received confirmation for items up to index {confirmed_index}")
-                except (ValueError, IndexError) as e:
-                    logger.debug(f"Error parsing item confirmation: {e}")
 
     def send_singleItem(self, id: int, itemCnt):
         msgCont = [str(id), str(itemCnt)]
@@ -202,7 +204,7 @@ class KHDDDSocket():
             self.send(MessageType.ReceiveAllItems, msg)
 
     def send_slot_data(self, slotType, data):
-        if slotType == SlotDataType.KeybladeStats:
+        if slotType == SlotDataType.keyblade_stats:
             splitNums = data.split(",")
             sendVal = [str(slotType)]
             currStat = 1
