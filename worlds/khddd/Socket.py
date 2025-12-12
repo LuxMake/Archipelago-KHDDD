@@ -18,6 +18,7 @@ class MessageType(IntEnum):
       SendSlotData = 10,
       Victory = 11,
       Handshake = 12,
+      GetCurrentIndex = 13,
       Closed = 20
       pass
 
@@ -37,6 +38,7 @@ class KHDDDSocket():
         self.deathTime = ""
         self.isConnected = False
         self.goaled = False
+        self.client_item_index = 0
         pass;
 
     async def start_server(self):
@@ -145,6 +147,9 @@ class KHDDDSocket():
             print("Attempting to respond to handshake")
             self.send(MessageType.Handshake, [str(self.client.connectedToAp)])
             print("Responded to Handshake")
+
+        elif msgType == MessageType.GetCurrentIndex:
+            self.client_item_index = int(message[1])
 
     def send_singleItem(self, id: int, itemCnt):
         msgCont = [str(id), str(itemCnt)]
