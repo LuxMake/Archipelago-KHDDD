@@ -18,7 +18,7 @@ class MessageType(IntEnum):
     SendSlotData = 10
     Victory = 11
     Handshake = 12
-    ItemReceivedConfirmation = 13
+    Closed = 20
 
 class DDDCommand(IntEnum):
     DROP = 0
@@ -57,8 +57,6 @@ class KHDDDSocket():
         self.client_socket = None
         self.deathTime = ""
         self.goaled = False
-        pass;
-
 
     async def start_server(self):
         logger.debug("Starting server... waiting for game.")
@@ -76,10 +74,13 @@ class KHDDDSocket():
                 logger.info("KHDDD game client connected.")
                 self.isConnected = True
                 self.loop.create_task(self.listen())
+                self.send_client_cmd(DDDCommand.DEATH_LINK, str(self.client.death_link)) 
+                # Reapply deathlink to game after ddd websocket reconnect
                 await self.client.get_items()
+                # Resend all items to game after ddd websocket reconnect 
                 return
             except OSError as e:
-                print(f"Socket accept failed ({e}); retrying in 5s")
+                logger.debug(f"Socket accept failed ({e}); retrying in 5s")
                 self.isConnected = False
                 await asyncio.sleep(5)
 
@@ -91,7 +92,6 @@ class KHDDDSocket():
         finally:
             self.client_socket = None
             self.isConnected = False
-
 
     async def listen(self):
         while True:
@@ -124,6 +124,7 @@ class KHDDDSocket():
             self.isConnected = False
         except Exception as e:
             logger.debug(f"Error sending message {msgId}: {e}")
+
 
     def handle_message(self, message: list[str]):
         if message[0] == '':
@@ -162,7 +163,7 @@ class KHDDDSocket():
             self.goaled = True
 
         elif msgType == MessageType.RequestAllItems:
-            self.client.get_items()
+            self.loop.create_task(self.client.get_items())
 
         elif msgType == MessageType.Handshake:
             logger.debug("Attempting to respond to handshake")
