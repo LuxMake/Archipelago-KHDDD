@@ -76,7 +76,7 @@ class KHDDDSocket():
                 self.loop.create_task(self.listen())
                 self.send_client_cmd(DDDCommand.DEATH_LINK, str(self.client.death_link)) 
                 # Reapply deathlink to game after ddd websocket reconnect
-                await self.client.get_items()
+                self.client.get_items()
                 # Resend all items to game after ddd websocket reconnect 
                 return
             except OSError as e:
@@ -92,6 +92,7 @@ class KHDDDSocket():
         finally:
             self.client_socket = None
             self.isConnected = False
+
 
     async def listen(self):
         while True:
@@ -124,7 +125,6 @@ class KHDDDSocket():
             self.isConnected = False
         except Exception as e:
             logger.debug(f"Error sending message {msgId}: {e}")
-
 
     def handle_message(self, message: list[str]):
         if message[0] == '':
@@ -163,7 +163,7 @@ class KHDDDSocket():
             self.goaled = True
 
         elif msgType == MessageType.RequestAllItems:
-            self.loop.create_task(self.client.get_items())
+            self.client.get_items()
 
         elif msgType == MessageType.Handshake:
             logger.debug("Attempting to respond to handshake")

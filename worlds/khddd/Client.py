@@ -135,13 +135,24 @@ class KHDDDContext(CommonContext):
         self.ui = KHDDDManager(self)
         self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")
 
-    async def get_items(self):
-        """Send all received items to the game client."""
-        while not self.exit_event.is_set():
-            if self.connectedToAp and self.items_received:
-                self.socket.send_multipleItems(self.items_received, len(self.items_received))
-                return
-            asyncio.sleep(5)
+    def get_items(self):
+        """Send all received items to the game client. This can't be async 
+        because of message handler, so putting it into an internal async function 
+        and running it with the Utils fire and forget function."""
+        @staticmethod
+        async def async_get_items(ctx: KHDDDContext):
+            try:
+                while not ctx.exit_event.is_set() and not ctx.connectedToAp:
+                    await asyncio.sleep(5)
+                if ctx.connectedToAp:
+                    if ctx.items_received:
+                        ctx.socket.send_multipleItems(ctx.items_received, len(ctx.items_received))
+            finally:
+                ctx._get_items_running = False
+
+        if not self._get_items_running:
+            self._get_items_running = True
+            Utils.async_start(async_get_items(self), name="KHDDDGetItems")
 
     async def send_slot_data(self):
         while not self.exit_event.is_set():
@@ -152,6 +163,7 @@ class KHDDDContext(CommonContext):
                 for key, value in self.slot_data_info.items():
                     if key in SlotDataType.__members__.keys():
                         self.socket.send_slot_data(SlotDataType[key], str(value))
+                break
 
 
 async def game_watcher(ctx: KHDDDContext):
