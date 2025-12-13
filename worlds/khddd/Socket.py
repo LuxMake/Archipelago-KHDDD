@@ -174,6 +174,9 @@ class KHDDDSocket():
             logger.debug("Responded to Handshake")
 
 
+        elif msgType == MessageType.GetCurrentIndex:
+            self.client_item_index = int(message[1])
+
     def send_singleItem(self, id: int, itemCnt):
         msgCont = [str(id), str(itemCnt)]
         self.send(MessageType.ReceiveSingleItem, msgCont)
