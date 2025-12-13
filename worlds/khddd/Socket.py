@@ -1,5 +1,6 @@
 from enum import IntEnum
 import asyncio
+from re import S
 import socket
 from CommonClient import logger
 
@@ -18,6 +19,7 @@ class MessageType(IntEnum):
     SendSlotData = 10
     Victory = 11
     Handshake = 12
+    GetCurrentIndex = 13
     Closed = 20
 
 class DDDCommand(IntEnum):
@@ -57,6 +59,7 @@ class KHDDDSocket():
         self.client_socket = None
         self.deathTime = ""
         self.goaled = False
+        self.client_item_index = 0
 
     async def start_server(self):
         logger.debug("Starting server... waiting for game.")
