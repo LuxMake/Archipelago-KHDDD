@@ -2,7 +2,7 @@ from __future__ import annotations
 import sys
 import asyncio
 
-from datetime import datetime, UTC, timedelta
+from datetime import datetime, timedelta
 from typing import Dict
 
 import ModuleUpdate
@@ -11,12 +11,7 @@ ModuleUpdate.update()
 import Utils
 item_num = 1
 
-deathLink = False
-sendDDDCmd = -1
-dddConnected = -1
-slotDataSent = False
-
-from .Socket import KHDDDSocket
+from .Socket import KHDDDSocket, SlotDataType, DDDCommand
 
 if __name__ == "__main__":
     Utils.init_logging("KHDDDClient", exception_logger="Client")
@@ -36,28 +31,20 @@ class KHDDDClientCommandProcessor(ClientCommandProcessor):
 
     def _cmd_drop(self):
         """Instantly drops the player."""
-        global sendDDDCmd
-        sendDDDCmd = 0
+        self.ctx.socket.send_client_cmd(DDDCommand.DROP, "")
         self.output("Dropping player.")
 
     def _cmd_unstuck(self):
         """Sends the inactive character to the World Map."""
-        global sendDDDCmd
-        sendDDDCmd = 1
+        self.ctx.socket.send_client_cmd(DDDCommand.UNSTUCK, "")
         self.output("Sending inactive character to the World Map.")
 
     def _cmd_deathlink(self):
         """Toggles Deathlink"""
-        global deathLink
-        global sendDDDCmd
-        if deathLink:
-            deathLink = False
-            self.output(f"Death Link turned off")
-            sendDDDCmd = 3
-        else:
-            deathLink = True
-            sendDDDCmd = 3
-            self.output(f"Death Link turned on")
+        self.ctx.death_link = not self.ctx.death_link
+        asyncio.create_task(self.ctx.update_death_link(self.ctx.death_link)).add_done_callback(
+            lambda _: self.output(f"Death Link turned {'on' if self.ctx.death_link else 'off'}"))
+        self.ctx.socket.send_client_cmd(DDDCommand.DEATH_LINK, str(self.ctx.death_link))
 
 
 
@@ -65,13 +52,14 @@ class KHDDDContext(CommonContext):
     command_processor: int = KHDDDClientCommandProcessor
     game = "Kingdom Hearts Dream Drop Distance"
     items_handling = 0b111 #Attempt full remote
+    death_link: bool = False
 
     #Vars for socket
     socket: KHDDDSocket = None
     check_location_IDs = []
-    received_items_IDs = []
     slot_data_info: Dict[str, str] = {}
-    connectedToAp = False
+    _connectedToAp: bool = False
+    _connectedToDDD: bool = False
 
     def __init__(self, server_address, password):
         super(KHDDDContext, self).__init__(server_address, password)
@@ -87,20 +75,23 @@ class KHDDDContext(CommonContext):
         await self.send_connect()
 
     async def connection_closed(self):
-        self.received_items_IDs = []
-        global dddConnected
-        dddConnected = -1
-        global slotDataSent
-        slotDataSent = False
         await super(KHDDDContext, self).connection_closed()
-        #for root, dirs, files in os.walk(self.game_communication_path):
-        #    for file in files:
-        #        if file.find("obtain") <= -1:
-        #            os.remove(root + "/" + file)
-        #global item_num
-        #item_num = 1
+        self.connectedToAp = False
+        self.slot_data_info = {}
 
+    @property
+    def connectedToAp(self) -> bool:
+        return self._connectedToAp
+    @connectedToAp.setter
+    def connectedToAp(self, value: bool):
+        self._connectedToAp = value
 
+    @property
+    def connectedToDDD(self) -> bool:
+        return self._connectedToDDD
+    @connectedToDDD.setter
+    def connectedToDDD(self, value: bool):
+        self._connectedToDDD = value
 
     @property
     def endpoints(self):
@@ -114,45 +105,11 @@ class KHDDDContext(CommonContext):
         self.socket.send(20, ["Closing"])
         self.socket.shutdown_server()
     
-    def on_package(self, cmd: str, args: dict):
-        global dddConnected
+    async def on_package(self, cmd: str, args: dict):
         if cmd in {"Connected"}:
             self.connectedToAp = True
-            global slotDataSent
-            if not slotDataSent:
-                if dddConnected > 0:
-                    if "keyblade_stats" in list(args['slot_data'].keys()):
-                        self.socket.send_slot_data(0, str(args['slot_data']['keyblade_stats']))
-                    self.socket.send_slot_data(1, str(args['slot_data']['character']))
-                    self.socket.send_slot_data(2, str(args['slot_data']['play_destiny_islands']))
-                    self.socket.send_slot_data(3, str(args['slot_data']['exp_multiplier']))
-                    self.socket.send_slot_data(4, str(args['slot_data']['skip_light_cycle']))
-                    self.socket.send_slot_data(5, str(args['slot_data']['fast_go_mode']))
-                    self.socket.send_slot_data(6, str(args['slot_data']['recipe_reqs']))
-                    self.socket.send_slot_data(7, str(args['slot_data']['win_con']))
-                    self.socket.send_slot_data(8, str(args['slot_data']['stat_bonus']))
-                    slotDataSent = True
-                else: #Hold slot data until game client connects
-                    if 'keyblade_stats' in list(args['slot_data'].keys()):
-                        self.slot_data_info['keyblade_stats'] = str(args['slot_data']['keyblade_stats'])
-                    self.slot_data_info['character'] = str(args['slot_data']['character'])
-                    self.slot_data_info['play_destiny_islands'] = str(args['slot_data']['play_destiny_islands'])
-                    self.slot_data_info['exp_multiplier'] = str(args['slot_data']['exp_multiplier'])
-                    self.slot_data_info['skip_light_cycle'] = str(args['slot_data']['skip_light_cycle'])
-                    self.slot_data_info['fast_go_mode'] = str(args['slot_data']['fast_go_mode'])
-                    self.slot_data_info['recipe_reqs'] = str(args['slot_data']['recipe_reqs'])
-                    self.slot_data_info['win_con'] = str(args['slot_data']['win_con'])
-                    self.slot_data_info['stat_bonus'] = str(args['slot_data']['stat_bonus'])
-
-        if cmd in {"ReceivedItems"}:
-            for item in args['items']:
-                self.received_items_IDs.append(NetworkItem(*item))
-                #self.received_items_IDs.append(NetworkItem(*item).item)
-            if dddConnected > 0:
-                if len(args['items']) > 1:
-                    self.socket.send_multipleItems(args['items'], len(self.received_items_IDs))
-                else:
-                    self.socket.send_singleItem(args['items'][0].item, len(self.received_items_IDs))
+            self.slot_data_info = args['slot_data']
+            await self.send_slot_data()
 
 
     def on_deathlink(self, data: dict[str, object]):
@@ -179,74 +136,66 @@ class KHDDDContext(CommonContext):
         self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")
 
     def get_items(self):
+        """Send all received items to the game client. This can't be async 
+        because of message handler, so putting it into an internal async function 
+        and running it with the Utils fire and forget function."""
+        @staticmethod
+        async def async_get_items(ctx: KHDDDContext):
+            try:
+                while not ctx.exit_event.is_set() and not ctx.connectedToAp:
+                    await asyncio.sleep(5)
+                if ctx.connectedToAp:
+                    if ctx.items_received:
+                        ctx.socket.send_multipleItems(ctx.items_received, len(ctx.items_received))
+            finally:
+                ctx._get_items_running = False
 
-        if len(self.received_items_IDs) > 1:
-            self.socket.send_multipleItems(self.received_items_IDs, len(self.received_items_IDs))
-        elif len(self.received_items_IDs) == 1:
-            self.socket.send_singleItem(self.received_items_IDs[0].item, 1)
+        if not self._get_items_running:
+            self._get_items_running = True
+            Utils.async_start(async_get_items(self), name="KHDDDGetItems")
 
-        global slotDataSent
-        if not slotDataSent:
-            if 'keyblade_stats' in self.slot_data_info.keys():
-                self.socket.send_slot_data(0, str(self.slot_data_info['keyblade_stats']))
-            self.socket.send_slot_data(1, str(self.slot_data_info['character']))
-            self.socket.send_slot_data(2, str(self.slot_data_info['play_destiny_islands']))
-            self.socket.send_slot_data(3, str(self.slot_data_info['exp_multiplier']))
-            self.socket.send_slot_data(4, str(self.slot_data_info['skip_light_cycle']))
-            self.socket.send_slot_data(5, str(self.slot_data_info['fast_go_mode']))
-            self.socket.send_slot_data(6, str(self.slot_data_info['recipe_reqs']))
-            self.socket.send_slot_data(7, str(self.slot_data_info['win_con']))
-            self.socket.send_slot_data(8, str(self.slot_data_info['stat_bonus']))
-            slotDataSent = True
-
+    async def send_slot_data(self):
+        while not self.exit_event.is_set():
+            if not self.connectedToDDD:
+                await asyncio.sleep(5)
+                continue
+            elif self.slot_data_info:
+                for key, value in self.slot_data_info.items():
+                    if key in SlotDataType.__members__.keys():
+                        self.socket.send_slot_data(SlotDataType[key], str(value))
+                break
 
 
 async def game_watcher(ctx: KHDDDContext):
     while not ctx.exit_event.is_set():
+        try:
+            if not ctx.connectedToDDD:
+                await asyncio.sleep(5)     
+                continue
 
-        #Deathlink
-        if deathLink and "DeathLink" not in ctx.tags:
-            await ctx.update_death_link(deathLink)
-        if not deathLink and "DeathLink" in ctx.tags:
-            await ctx.update_death_link(deathLink)
+            if ctx.socket.deathTime != "" and ctx.death_link:
+                # New death detected, parse deathTime as local datetime
+                death_time = datetime.strptime(ctx.socket.deathTime, '%Y%m%d%H%M%S')
+                ctx.socket.deathTime = ""
+                time_window = timedelta(seconds=20)
+                if death_time + time_window >= datetime.now():
+                    logger.info(f"Sending deathlink...")
+                    await ctx.send_death(death_text=f"{ctx.username} fell to a nightmare")
 
-        if ctx.socket.deathTime != "" and deathLink:
-            death_time = datetime.strptime(ctx.socket.deathTime, '%Y%m%d%H%M%S').replace(tzinfo=UTC)
-            time_window = timedelta(seconds=10)
-            if (death_time + time_window).timestamp() > ctx.last_death_link:
-                logger.info(f"Sending deathlink...")
-                await ctx.send_death(death_text="Character defeated")
-
-
-
-        #Send a command to the game
-        global sendDDDCmd
-        if sendDDDCmd > -1:
-            if (sendDDDCmd == 3):
-                ctx.socket.send_client_cmd(sendDDDCmd, str(deathLink))
-            else:
-                ctx.socket.send_client_cmd(sendDDDCmd, "")
-            sendDDDCmd = -1
-
-        #Check for game connection
-        global dddConnected
-        if dddConnected == -1:
-            logger.info("Waiting for KHDDD Game Client...")
-            dddConnected = 0
-        elif dddConnected == 0:
-            if ctx.socket.isConnected:
-                logger.info(f"KHDDD Game Client Found")
-                dddConnected = 1
-        elif dddConnected == 1: #Check for game completion
             if ctx.socket.goaled and not ctx.finished_game:
                 await ctx.send_msgs([{"cmd": "StatusUpdate", "status": ClientStatus.CLIENT_GOAL}])
                 ctx.finished_game = True
 
+            ctx.locations_checked = ctx.check_location_IDs
+            message = [{"cmd": 'LocationChecks', "locations": ctx.check_location_IDs}]
+            await ctx.send_msgs(message)
+            await asyncio.sleep(0.5)
 
-        ctx.locations_checked = ctx.check_location_IDs
-        message = [{"cmd": 'LocationChecks', "locations": ctx.check_location_IDs}]
-        await ctx.send_msgs(message)
-        await asyncio.sleep(0.5)
+
+        except Exception as e:
+            logger.error(f"Error in game watcher: {e}")
+            ctx.connectedToDDD = False
+            continue
 
 def launch():
 
@@ -257,7 +206,7 @@ def launch():
             ctx.run_gui()
         ctx.run_cli()
         progression_watcher = asyncio.create_task(
-                game_watcher(ctx), name="KHDDDProgressionWatcher")
+            game_watcher(ctx), name="KHDDDProgressionWatcher")
 
         await ctx.exit_event.wait()
         ctx.server_address = None
