@@ -1,3 +1,4 @@
 [submodule "worlds/khddd"]
 	path = worlds/khddd
 	url = https://github.com/LuxMake/Archipelago-worlds-khddd.git
+	ignore = all
